@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Учёт смен и доходов</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans antialiased">
+
+    <div class="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold text-indigo-600">Мой календарь смен</h1>
+            <p class="text-gray-500 mt-2">Учёт рабочего времени, часовой ставки и премий</p>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-white p-6 rounded-xl shadow-md md:col-span-1">
+                <h2 class="text-xl font-semibold mb-4 text-gray-700">Добавить смену</h2>
+                <form id="shiftForm" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1">Дата</label>
+                        <input type="date" id="shiftDate" required class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-1">Начало</label>
+                            <input type="time" id="startTime" required class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-1">Конец</label>
+                            <input type="time" id="endTime" required class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1">Ставка за час (₽)</label>
+                        <input type="number" id="hourlyRate" value="300" required class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+
+                    <button type="submit" class="w-full bg-indigo-600 text-white py-2 rounded-lg font-medium hover:bg-indigo-700 transition">
+                        Сохранить смену
+                    </button>
+                </form>
+            </div>
+
+            <div class="md:col-span-2 space-y-6">
+                <div class="bg-white p-4 rounded-xl shadow-md flex items-center justify-between">
+                    <label class="font-medium text-gray-700">Выбрать месяц:</label>
+                    <input type="month" id="monthFilter" class="px-3 py-1.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+
+                <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                    <div class="p-4 border-b bg-gray-50">
+                        <h3 class="font-semibold text-gray-700">История смен за месяц</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-gray-100 text-xs uppercase text-gray-600 font-semibold border-b">
+                                    <th class="p-3">Дата</th>
+                                    <th class="p-3">Время</th>
+                                    <th class="p-3 text-center">Часы</th>
+                                    <th class="p-3 text-right">Ставка</th>
+                                    <th class="p-3 text-right">Сумма</th>
+                                    <th class="p-3 text-center">Действие</th>
+                                </tr>
+                            </thead>
+                            <tbody id="shiftsTableBody" class="divide-y divide-gray-200 text-sm">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="bg-gradient-to-br from-indigo-600 to-purple-700 text-white p-6 rounded-xl shadow-md grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+                    <div>
+                        <p class="text-indigo-200 text-sm uppercase font-semibold">Заработано по часам</p>
+                        <p class="text-2xl font-bold"><span id="totalBaseEarned">0</span> ₽</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-indigo-200 text-sm uppercase font-semibold mb-1">Премия за месяц (₽)</label>
+                        <input type="number" id="monthlyBonus" value="0" min="0" class="w-full bg-white/10 text-white placeholder-indigo-300 border border-white/20 rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-white">
+                    </div>
+
+                    <div class="sm:text-right border-t sm:border-t-0 sm:border-l border-white/20 pt-3 sm:pt-0 sm:pl-4">
+                        <p class="text-indigo-200 text-sm uppercase font-semibold">Общий итог</p>
+                        <p class="text-3xl font-extrabold text-yellow-300"><span id="grandTotal">0</span> ₽</p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Хранилище для смен в локальной памяти браузера
+        let shifts = JSON.parse(localStorage.getItem('factory_shifts')) || [];
+
+        // Установка текущего месяца в фильтр при загрузке
+        const now = new Date();
+        const currentMonthString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        document.getElementById('monthFilter').value = currentMonthString;
+
+        // Загрузка сохраненной премии
+        document.getElementById('monthlyBonus').value = localStorage.getItem('monthly_bonus_' + currentMonthString) || 0;
+
+        // Элементы DOM
+        const shiftForm = document.getElementById('shiftForm');
+        const shiftsTableBody = document.getElementById('shiftsTableBody');
+        const monthFilter = document.getElementById('monthFilter');
+        const monthlyBonusInput = document.getElementById('monthlyBonus');
+
+        // Функция автоматического расчета часов между началом и концом
+        function calculateHours(start, end) {
+            let [startH, startM] = start.split(':').map(Number);
+            let [endH, endM] = end.split(':').map(Number);
+            
+            let startMinutes = startH * 60 + startM;
+            let endMinutes = endH * 60 + endM;
+            
+            // Если закончилось на следующий день (например, с 20:00 до 08:00)
+            if (endMinutes < startMinutes) {
+                endMinutes += 24 * 60;
+            }
+            
+            return parseFloat(((endMinutes - startMinutes) / 60).toFixed(2));
+        }
+
+        // Функция форматирования даты (ДД.ММ.ГГГГ)
+        function formatDate(dateStr) {
+            const [year, month, day] = dateStr.split('-');
+            return `${day}.${month}.${year}`;
+        }
+
+        // Рендеринг таблицы и подсчет итогов
+        function updateUI() {
+            const selectedMonth = monthFilter.value; // формат "YYYY-MM"
+            shiftsTableBody.innerHTML = '';
+            
+            let totalBaseEarned = 0;
+
+            // Сортируем смены по дате (от новых к старым)
+            const filteredShifts = shifts
+                .filter(shift => shift.date.startsWith(selectedMonth))
+                .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            if (filteredShifts.length === 0) {
+                shiftsTableBody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-400 italic">Смен за этот месяц не найдено</td></tr>`;
+            }
+
+            filteredShifts.forEach(shift => {
+                const shiftEarned = shift.hours * shift.rate;
+                totalBaseEarned += shiftEarned;
+
+                const row = document.createElement('tr');
+                row.className = "hover:bg-gray-50 transition";
+                row.innerHTML = `
+                    <td class="p-3 font-medium">${formatDate(shift.date)}</td>
+                    <td class="p-3 text-gray-500">${shift.startTime} - ${shift.endTime}</td>
+                    <td class="p-3 text-center font-semibold text-gray-700">${shift.hours} ч</td>
+                    <td class="p-3 text-right text-gray-600">${shift.rate} ₽</td>
+                    <td class="p-3 text-right font-bold text-gray-900">${shiftEarned.toLocaleString()} ₽</td>
+                    <td class="p-3 text-center">
+                        <button onclick="deleteShift('${shift.id}')" class="text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50 transition">
+                            Удалить
+                        </button>
+                    </td>
+                `;
+                shiftsTableBody.appendChild(row);
+            });
+
+            // Обновляем суммы на экране
+            document.getElementById('totalBaseEarned').innerText = totalBaseEarned.toLocaleString();
+            
+            const bonus = parseFloat(monthlyBonusInput.value) || 0;
+            const grandTotal = totalBaseEarned + bonus;
+            document.getElementById('grandTotal').innerText = grandTotal.toLocaleString();
+        }
+
+        // Обработка отправки формы (Добавление смены)
+        shiftForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+
+            const date = document.getElementById('shiftDate').value;
+            const startTime = document.getElementById('startTime').value;
+            const endTime = document.getElementById('endTime').value;
+            const rate = parseFloat(document.getElementById('hourlyRate').value);
+
+            const hours = calculateHours(startTime, endTime);
+
+            const newShift = {
+                id: Date.now().toString(),
+                date,
+                startTime,
+                endTime,
+                hours,
+                rate
+            };
+
+            shifts.push(newShift);
+            localStorage.setItem('factory_shifts', JSON.stringify(shifts));
+            
+            // Сбрасываем только поля времени и даты, ставку оставляем
+            document.getElementById('shiftDate').value = '';
+            document.getElementById('startTime').value = '';
+            document.getElementById('endTime').value = '';
+            
+            updateUI();
+        });
+
+        // Удаление смены
+        window.deleteShift = function(id) {
+            shifts = shifts.filter(shift => shift.id !== id);
+            localStorage.setItem('factory_shifts', JSON.stringify(shifts));
+            updateUI();
+        };
+
+        // Изменение месяца в фильтре
+        monthFilter.addEventListener('change', () => {
+            // Загружаем сохраненную премию для выбранного месяца
+            monthlyBonusInput.value = localStorage.getItem('monthly_bonus_' + monthFilter.value) || 0;
+            updateUI();
+        });
+
+        // Изменение премии за месяц
+        monthlyBonusInput.addEventListener('input', () => {
+            localStorage.setItem('monthly_bonus_' + monthFilter.value, monthlyBonusInput.value || 0);
+            updateUI();
+        });
+
+        // Первичная прорисовка при открытии страницы
+        updateUI();
+    </script>
+</body>
+</html>
